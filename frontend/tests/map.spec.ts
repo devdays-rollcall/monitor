@@ -9,6 +9,10 @@ const members = [
   '33333333-3333-4333-8333-333333333333',
 ];
 
+test.beforeEach(async ({ context }) => {
+  await context.route('https://mc.yandex.ru/**', (route) => route.abort());
+});
+
 function event(member: string, index: number, minute: number): EventOutput {
   return {
     id: `${member.slice(0, 24)}${String(index + minute).padStart(12, '0')}`,

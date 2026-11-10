@@ -20,7 +20,7 @@ export const GlobalStyle = createGlobalStyle`
   body { margin: 0; min-width: 320px; }
   button, input { font: inherit; }
   .lucide { stroke-width: 1.8; }
-  button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid #007aff; outline-offset: 3px; }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid #007aff; outline-offset: 3px; }
   .route-map { width: 100%; height: 100%; background: #e6ece7; font: inherit; }
   .maplibregl-ctrl-group { border: 1px solid var(--glass-edge); border-radius: 12px; overflow: hidden; background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
   .maplibregl-ctrl-group:not(:empty) { box-shadow: var(--glass-shadow); }
@@ -143,7 +143,9 @@ export const TokenInput = styled.input`
   &:focus-visible { outline: 2px solid #687d89; outline-offset: 0; }
 `;
 
-export const Action = styled(Button)`
+export const LoginAction = styled(Button)`
+  width: 100%;
+  margin-top: 12px;
   border: 0;
   border-radius: 10px;
   background: linear-gradient(160deg, rgba(255, 255, 255, .1), rgba(0, 35, 100, .1)) #0875df;
@@ -163,8 +165,6 @@ export const Action = styled(Button)`
   &:disabled { opacity: .6; cursor: wait; }
   @media (pointer: coarse) { min-height: 44px; }
 `;
-
-export const LoginAction = styled(Action)`width: 100%; margin-top: 12px;`;
 
 export const Spinner = styled.svg`
   animation: spin .8s linear infinite;
@@ -230,19 +230,17 @@ export const ShareFeedback = styled.div<{ $error: boolean }>`
   strong { font-weight: 650; }
   span { color: #30363c; margin-top: 2px; }
 `;
-export const Secondary = styled(Button)`
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  min-height: 36px; border: 1px solid var(--glass-edge); border-radius: 10px; background: var(--glass); color: var(--ink);
+export const IconButton = styled(Button)`
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; min-height: 36px; border: 1px solid var(--glass-edge); border-radius: 10px; background: var(--glass); color: var(--ink);
   box-shadow: var(--glass-shadow);
-  font-size: 13px; font-weight: 600; cursor: pointer; padding: 7px 10px;
+  cursor: pointer; padding: 0;
   transition: background-color .15s ease;
   @media (hover: hover) { &:hover:not(:disabled) { background-color: rgba(170, 205, 227, .2); } }
   &:active:not(:disabled) { background-color: rgba(143, 188, 216, .32); }
   &:disabled { opacity: .6; cursor: wait; }
-  @media (pointer: coarse) { min-height: 44px; }
+  @media (pointer: coarse) { width: 44px; min-height: 44px; }
 `;
-
-export const IconButton = styled(Secondary)`width: 36px; padding: 0; @media (pointer: coarse) { width: 44px; }`;
 
 export const SectionLabel = styled.div`
   display: flex; justify-content: space-between; align-items: center;
