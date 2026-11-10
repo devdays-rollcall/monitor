@@ -4,7 +4,7 @@
 
 ## Запуск
 
-Нужны Docker с Compose и Make. Из корня проекта запустите:
+Нужны Docker с Compose, Make, Node.js 24 и pnpm. Команда собирает frontend локально и запускает сервисы. Из корня проекта запустите:
 
 ```bash
 make up
