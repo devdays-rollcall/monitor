@@ -36,7 +36,10 @@ paths:
           $ref: '#/components/responses/Unavailable'
     get:
       operationId: getEvents
-      summary: Read stored events for the group
+      summary: Read stored events with a group or read-only token
+      security:
+        - groupToken: []
+        - viewToken: []
       parameters:
         - name: limit
           in: query
@@ -64,11 +67,32 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /api/v1/share-links:
+    post:
+      operationId: createShareLink
+      summary: Create a read-only token for an existing group
+      responses:
+        '201':
+          description: Read-only token created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 components:
   securitySchemes:
     groupToken:
       type: http
       scheme: bearer
+    viewToken:
+      type: http
+      scheme: bearer
+      description: Read-only token starting with view_
   responses:
     BadRequest:
       description: Invalid request
@@ -107,6 +131,12 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    ShareToken:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
     EventBatch:
       type: object
       required: [sender_id, events]

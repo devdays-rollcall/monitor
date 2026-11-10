@@ -57,12 +57,20 @@ public class EventResource {
             @HeaderParam("Authorization") String authorization,
             @QueryParam("limit") String limitValue,
             @QueryParam("cursor") String cursorValue) {
-        var hash = validator.groupHash(authorization);
+        boolean readOnly =
+                authorization != null
+                        && authorization.length() == 55
+                        && authorization.startsWith("Bearer view_");
+        var hash =
+                validator.groupHash(
+                        readOnly ? "Bearer " + authorization.substring(12) : authorization);
         int limit = parseLimit(limitValue);
         long cursor = store.decodeCursor(cursorValue);
 
         try {
-            return Response.ok(store.page(hash, limit, cursor)).build();
+            return Response.ok(store.page(hash, limit, cursor, readOnly))
+                    .header("Cache-Control", "no-store")
+                    .build();
         } catch (SQLException | IOException exception) {
             LOG.warn("event read failed", exception);
             throw new ApiFailure(503, "unavailable", "event storage is unavailable");

@@ -14,6 +14,7 @@ make up
 
 ```bash
 docker compose exec -T postgres psql -U user -d monitordb -v ON_ERROR_STOP=1 < backend/migrations/001_init.sql
+docker compose exec -T postgres psql -U user -d monitordb -v ON_ERROR_STOP=1 < backend/migrations/002_share_tokens.sql
 ```
 
 При повторном запуске существующего тома миграцию повторять не нужно. Сайт и API доступны через Nginx на `http://localhost:8080`. PostgreSQL и NATS хранят данные в Docker volumes.
@@ -54,7 +55,7 @@ curl 'http://localhost:8080/api/v1/events?limit=500' \
   -H 'Authorization: Bearer <group_token>'
 ```
 
-`202 Accepted` подтверждает публикацию в очередь; события становятся доступны для чтения после обработки worker.
+`202 Accepted` подтверждает публикацию в очередь; события становятся доступны для чтения после обработки worker. Ссылка содержит отдельный токен только для чтения в query-параметре `view`. Он может попасть в логи сервера и историю браузера. Каждый, у кого есть ссылка, может просматривать события группы; срок действия и отзыв ссылок не предусмотрены.
 
 ## Разработка
 
@@ -82,7 +83,7 @@ create role "user" login;
 create database monitordb owner "user";
 ```
 
-Пароль задаётся интерактивно. После этого вручную примените `backend/migrations/001_init.sql` к новой базе от имени `user`.
+Пароль задаётся интерактивно. После этого вручную примените `backend/migrations/001_init.sql` и `backend/migrations/002_share_tokens.sql` к новой базе от имени `user`.
 
 Соберите фронтенд локально и скопируйте результат в каталог сервера до обновления ingress:
 

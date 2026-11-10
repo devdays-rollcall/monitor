@@ -146,10 +146,28 @@ public class EventStore {
         }
     }
 
-    public EventPage page(String groupHash, int limit, long cursor)
+    public void createShareToken(String groupHash, String shareHash) throws SQLException {
+        var sql =
+                """
+                insert into share_tokens (token_hash, group_id)
+                select ?, id from groups where token_hash = ?
+                """;
+
+        try (var connection = dataSource.getConnection();
+                var statement = connection.prepareStatement(sql)) {
+            statement.setBytes(1, HexFormat.of().parseHex(shareHash));
+            statement.setBytes(2, HexFormat.of().parseHex(groupHash));
+
+            if (statement.executeUpdate() == 0) {
+                throw new ApiFailure(404, "group_not_found", "group not found");
+            }
+        }
+    }
+
+    public EventPage page(String groupHash, int limit, long cursor, boolean readOnly)
             throws SQLException, JsonProcessingException {
         try (var connection = dataSource.getConnection()) {
-            long groupId = findGroup(connection, groupHash);
+            long groupId = findGroup(connection, groupHash, readOnly);
             var sql =
                     """
                     select stored.sequence, stored.id, stored.member_id, stored.type,
@@ -210,8 +228,12 @@ public class EventStore {
         }
     }
 
-    private long findGroup(Connection connection, String groupHash) throws SQLException {
-        var sql = "select id from groups where token_hash = ?";
+    private long findGroup(Connection connection, String groupHash, boolean readOnly)
+            throws SQLException {
+        var sql =
+                readOnly
+                        ? "select group_id from share_tokens where token_hash = ?"
+                        : "select id from groups where token_hash = ?";
 
         try (var statement = connection.prepareStatement(sql)) {
             statement.setBytes(1, HexFormat.of().parseHex(groupHash));

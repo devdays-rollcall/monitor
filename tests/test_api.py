@@ -32,8 +32,8 @@ def event(member=None, latitude=43.35):
     }
 
 
-def request(method, group_token=None, body=None, query=None):
-    url = BASE_URL + "/api/v1/events"
+def request(method, group_token=None, body=None, query=None, path="/api/v1/events"):
+    url = BASE_URL + path
 
     if query:
         url += "?" + urllib.parse.urlencode(query)
@@ -111,6 +111,29 @@ def nats_command(wire):
 
 
 class HttpContractTest(unittest.TestCase):
+    def test_share_token_allows_reading_but_not_writing(self):
+        group_token = token()
+        sender = str(uuid.uuid4())
+        batch = {"sender_id": sender, "events": [event(sender)]}
+        self.assertEqual(202, request("POST", group_token, batch)[0])
+        original = wait_for_group(group_token, 1)
+
+        status, share = request("POST", group_token, path="/api/v1/share-links")
+        self.assertEqual(201, status)
+        self.assertRegex(share["token"], r"^view_[A-Za-z0-9_-]{43}$")
+        self.assertEqual((200, original), request("GET", share["token"]))
+        self.assertEqual(401, request("POST", share["token"], batch)[0])
+        self.assertEqual(401, request("POST", share["token"], path="/api/v1/share-links")[0])
+        self.assertEqual(404, request("GET", "view_" + token())[0])
+        self.assertEqual(404, request("POST", token(), path="/api/v1/share-links")[0])
+
+    def test_group_token_can_start_with_view_prefix(self):
+        group_token = 'view_' + 'A' * 38
+        sender = str(uuid.uuid4())
+        self.assertEqual(202, request("POST", group_token, {"sender_id": sender, "events": []})[0])
+        self.assertEqual([], wait_for_group(group_token, 0)["events"])
+        self.assertEqual(201, request("POST", group_token, path="/api/v1/share-links")[0])
+
     def test_batch_limit(self):
         group_token = token()
         sender = str(uuid.uuid4())
