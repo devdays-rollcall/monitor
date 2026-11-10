@@ -26,7 +26,7 @@ docker compose exec -T postgres psql -U user -d monitordb -v ON_ERROR_STOP=1 < b
 docker compose up -d --no-build --scale api=2 --scale worker=2
 ```
 
-JetStream хранит и обработанные сообщения: размер его тома будет расти, поэтому за свободным местом нужно следить.
+JetStream удаляет обработанные сообщения после подтверждения worker. Необработанные сообщения хранятся не более 24 часов: если worker не обработает их за это время, они будут удалены.
 
 ## Демонстрационные данные
 
@@ -63,3 +63,40 @@ Backend использует JDK 25 и Gradle Wrapper; форматирован�
 Для проверки backend выполните `backend/gradlew -p backend test`. При запущенном стеке `python3 -m unittest discover -s tests -v` проверяет HTTP API; с `MONITOR_FAULT_TESTS=1` проверяются также восстановление после остановки PostgreSQL, NATS и worker. Проверки создают группы в текущей базе; проверки восстановления временно останавливают и запускают контейнеры.
 
 Для браузерных тестов установите зависимости в `frontend/` командой `pnpm install`, затем выполните `pnpm exec playwright install chromium` и `pnpm test:e2e` при запущенном стеке.
+
+## Развёртывание на сервере Vareonix
+
+На сервере используются существующие PostgreSQL и NATS; приложение запускается отдельным Compose-проектом в сети `vareonix-4801b5551dc3`. В deployer должны быть применены маршрут `rollcall.vareonix.cc` и `max_payload: 2097152` для NATS.
+
+Соберите образы локально для архитектуры сервера и загрузите в GHCR, указав свой namespace и версию:
+
+```bash
+docker buildx build --platform linux/amd64 -f backend/Dockerfile -t ghcr.io/<namespace>/rollcall-backend:<version> --push .
+docker buildx build --platform linux/amd64 -f frontend/Dockerfile -t ghcr.io/<namespace>/rollcall-web:<version> --push .
+```
+
+Для публикации и загрузки приватных образов нужна авторизация в GHCR. На сервере откройте `psql` в существующем контейнере PostgreSQL, затем создайте пользователя и базу:
+
+```sql
+create role "user" login;
+\password user
+create database monitordb owner "user";
+```
+
+Пароль задаётся интерактивно. После этого вручную примените `backend/migrations/001_init.sql` к новой базе от имени `user`.
+
+Поместите `compose.production.yaml` в отдельный каталог на сервере и создайте там файл `.env` с правами `0600`:
+
+```dotenv
+NATS_URL=nats://<user>:<password>@nats:4222
+POSTGRES_USER=<database-user>
+POSTGRES_PASSWORD=<database-password>
+```
+
+Специальные символы в имени пользователя и пароле NATS должны быть URL-кодированы. Не добавляйте `.env` в Git.
+
+```bash
+docker compose -p rollcall -f compose.production.yaml up -d
+```
+
+На существующем stream `GROUP_EVENTS` с другой политикой хранения приложение не будет принимать события: настройки stream нужно изменить отдельно, предварительно сохранив необработанные сообщения. Не удаляйте stream и том NATS ради обновления.

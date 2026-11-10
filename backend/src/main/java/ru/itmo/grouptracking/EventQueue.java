@@ -88,7 +88,8 @@ public class EventQueue {
                                 .name(STREAM)
                                 .subjects(SUBJECT)
                                 .storageType(StorageType.File)
-                                .retentionPolicy(RetentionPolicy.Limits)
+                                .retentionPolicy(RetentionPolicy.WorkQueue)
+                                .maxAge(Duration.ofHours(24))
                                 .build();
 
                 try {
@@ -96,6 +97,13 @@ public class EventQueue {
                 } catch (JetStreamApiException conflict) {
                     management.getStreamInfo(STREAM);
                 }
+            }
+
+            var stream = management.getStreamInfo(STREAM).getConfiguration();
+
+            if (stream.getRetentionPolicy() != RetentionPolicy.WorkQueue
+                    || !Duration.ofHours(24).equals(stream.getMaxAge())) {
+                throw new IOException("GROUP_EVENTS has incompatible retention settings");
             }
 
             connection = opened;

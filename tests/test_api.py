@@ -223,6 +223,37 @@ class HttpContractTest(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("MONITOR_FAULT_TESTS") == "1", "set MONITOR_FAULT_TESTS=1 to stop and restart infrastructure")
 class FaultRecoveryTest(unittest.TestCase):
+    def test_processed_message_is_removed_from_queue(self):
+        wait_for_queue()
+        group_token = token()
+        sender = str(uuid.uuid4())
+        subprocess.run(["docker", "compose", "stop", "worker"], check=True, capture_output=True)
+
+        try:
+            self.assertEqual(202, request("POST", group_token, {"sender_id": sender, "events": []})[0])
+            wire = b'CONNECT {"verbose":false}\r\nSUB _INBOX.inspect 1\r\nPUB $JS.API.STREAM.INFO.GROUP_EVENTS _INBOX.inspect 2\r\n{}\r\n'
+            reply = nats_command(wire)
+            response = next(json.loads(line) for line in reply.splitlines() if line.startswith(b'{"type"'))
+            self.assertEqual("workqueue", response["config"]["retention"])
+            self.assertEqual(24 * 60 * 60 * 1_000_000_000, response["config"]["max_age"])
+            sequence = response["state"]["last_seq"]
+        finally:
+            subprocess.run(["docker", "compose", "start", "worker"], check=True, capture_output=True)
+
+        wait_for_group(group_token, 0)
+        payload = json.dumps({"seq": sequence}).encode()
+        wire = b'CONNECT {"verbose":false}\r\nSUB _INBOX.inspect 1\r\nPUB $JS.API.STREAM.MSG.GET.GROUP_EVENTS _INBOX.inspect ' + str(len(payload)).encode() + b"\r\n" + payload + b"\r\n"
+        deadline = time.monotonic() + 10
+
+        while time.monotonic() < deadline:
+            reply = nats_command(wire)
+            response = next(json.loads(line) for line in reply.splitlines() if line.startswith(b'{"type"'))
+
+            if response.get("error", {}).get("code") == 404:
+                return
+
+        self.fail("processed message was not removed")
+
     def test_invalid_queue_message_does_not_block_following_batches(self):
         wait_for_queue()
 
@@ -245,9 +276,16 @@ class FaultRecoveryTest(unittest.TestCase):
 
             payload = json.dumps({"seq": int(match.group(1))}).encode()
             wire = b'CONNECT {"verbose":false}\r\nSUB _INBOX.inspect 1\r\nPUB $JS.API.STREAM.MSG.GET.GROUP_EVENTS _INBOX.inspect ' + str(len(payload)).encode() + b"\r\n" + payload + b"\r\n"
-            reply = nats_command(wire)
-            response = next(json.loads(line) for line in reply.splitlines() if line.startswith(b'{"type"'))
-            self.assertEqual(malformed, base64.b64decode(response["message"]["data"]))
+            deadline = time.monotonic() + 10
+
+            while time.monotonic() < deadline:
+                reply = nats_command(wire)
+                response = next(json.loads(line) for line in reply.splitlines() if line.startswith(b'{"type"'))
+
+                if response.get("error", {}).get("code") == 404:
+                    break
+            else:
+                self.fail("terminated message was not removed")
 
         group_token = token()
         sender = str(uuid.uuid4())

@@ -1,0 +1,41 @@
+services:
+  rollcall-api:
+    image: ghcr.io/devdays-rollcall/monitor-backend:initial
+    environment:
+      APP_ROLE: api
+      NATS_URL: ${NATS_URL:?Set NATS_URL}
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/monitordb
+      QUARKUS_DATASOURCE_USERNAME: ${POSTGRES_USER:?Set POSTGRES_USER}
+      QUARKUS_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    networks:
+      app:
+        aliases:
+          - api
+      shared: {}
+    restart: always
+
+  rollcall-worker:
+    image: ghcr.io/devdays-rollcall/monitor-backend:initial
+    environment:
+      APP_ROLE: worker
+      NATS_URL: ${NATS_URL:?Set NATS_URL}
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/monitordb
+      QUARKUS_DATASOURCE_USERNAME: ${POSTGRES_USER:?Set POSTGRES_USER}
+      QUARKUS_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    networks:
+      - app
+      - shared
+    restart: always
+
+  rollcall-web:
+    image: ghcr.io/devdays-rollcall/monitor-web:initial
+    networks:
+      - app
+      - shared
+    restart: always
+
+networks:
+  app: {}
+  shared:
+    external: true
+    name: vareonix-4801b5551dc3
