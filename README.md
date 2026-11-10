@@ -66,13 +66,12 @@ Backend использует JDK 25 и Gradle Wrapper; форматирован�
 
 ## Развёртывание на сервере Vareonix
 
-На сервере используются существующие PostgreSQL и NATS; приложение запускается отдельным Compose-проектом в сети `vareonix-4801b5551dc3`. В deployer должны быть применены маршрут `rollcall.vareonix.cc` и `max_payload: 2097152` для NATS.
+На сервере используются существующие PostgreSQL, NATS и ingress Nginx. API и worker запускаются отдельным Compose-проектом в сети `vareonix-4801b5551dc3`. Существующий ingress раздаёт статику из каталога `/home/daniil.mironenko/rollcall/frontend` и проксирует запросы API. В deployer должны быть применены маршрут `rollcall.vareonix.cc` и `max_payload: 2097152` для NATS.
 
 Соберите образы локально для архитектуры сервера и загрузите в GHCR, указав свой namespace и версию:
 
 ```bash
 docker buildx build --platform linux/amd64 -f backend/Dockerfile -t ghcr.io/<namespace>/rollcall-backend:<version> --push .
-docker buildx build --platform linux/amd64 -f frontend/Dockerfile -t ghcr.io/<namespace>/rollcall-web:<version> --push .
 ```
 
 Для публикации и загрузки приватных образов нужна авторизация в GHCR. На сервере откройте `psql` в существующем контейнере PostgreSQL, затем создайте пользователя и базу:
@@ -84,6 +83,16 @@ create database monitordb owner "user";
 ```
 
 Пароль задаётся интерактивно. После этого вручную примените `backend/migrations/001_init.sql` к новой базе от имени `user`.
+
+Соберите фронтенд локально и скопируйте результат в каталог сервера до обновления ingress:
+
+```bash
+cd frontend
+pnpm install --frozen-lockfile
+pnpm build
+rsync -a dist/ daniil.mironenko@153.76.163.163:rollcall/frontend/
+cd ..
+```
 
 Поместите `compose.production.yaml` в отдельный каталог на сервере и создайте там файл `.env` с правами `0600`:
 
