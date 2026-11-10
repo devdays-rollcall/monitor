@@ -1,0 +1,13 @@
+.git
+**/.gradle
+**/build
+**/node_modules
+**/dist
+frontend/src/generated
+frontend/test-results
+frontend/playwright-report
+frontend/*.tsbuildinfo
+frontend/tests
+frontend/playwright.config.ts
+tests/__pycache__
+**/.DS_Store

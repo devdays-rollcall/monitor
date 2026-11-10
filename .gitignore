@@ -1,1 +1,11 @@
 .DS_Store
+.env
+backend/.gradle/
+backend/build/
+frontend/node_modules/
+frontend/dist/
+frontend/src/generated/
+frontend/test-results/
+frontend/playwright-report/
+frontend/*.tsbuildinfo
+tests/__pycache__/

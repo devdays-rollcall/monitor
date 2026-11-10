@@ -1,0 +1,59 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      APP_ROLE: api
+      NATS_URL: nats://nats:4222
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/monitordb
+      QUARKUS_DATASOURCE_USERNAME: user
+      QUARKUS_DATASOURCE_PASSWORD: password
+    restart: always
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      APP_ROLE: worker
+      NATS_URL: nats://nats:4222
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/monitordb
+      QUARKUS_DATASOURCE_USERNAME: user
+      QUARKUS_DATASOURCE_PASSWORD: password
+    restart: always
+
+  nats:
+    image: nats:2.12-alpine
+    command: ["-c", "/etc/nats/nats.conf"]
+    volumes:
+      - nats-data:/data
+      - ./infra/nats.conf:/etc/nats/nats.conf:ro
+    restart: always
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: monitordb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d monitordb"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: always
+
+  nginx:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "8080:80"
+    restart: always
+
+volumes:
+  postgres-data:
+  nats-data:
