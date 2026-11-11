@@ -323,54 +323,37 @@ test('shows progress and errors when sharing, and allows retrying', async ({ pag
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 });
 
-test('observers vote to clear a warning and can copy notification subscription', async ({ page, context }) => {
+test('any viewer can clear a warning and copy the ntfy address', async ({ page, context }) => {
   let active = false;
-  let registered = false;
-  let approved = false;
-  let approvals = 0;
-  let savedObserver = '';
-  const state = (key?: string) => ({ active, alert_id: active ? '0b08ff93-5e04-4e55-8cac-769f84050a20' : null, subscription_url: 'https://notify.example/rollcall-random', observers: 2, approvals, required_approvals: 2, registered: registered && key === savedObserver, approved: approved && key === savedObserver });
+  const state = () => ({ active, alert_id: active ? '0b08ff93-5e04-4e55-8cac-769f84050a20' : null, subscription_url: 'https://notify.example/rollcall-random', observers: 0, approvals: 0, required_approvals: 1, registered: false, approved: false });
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.route('**/api/v1/events*', (route) => route.fulfill({ json: { events: [], next_cursor: null } }));
-  await page.route('**/api/v1/observers', async (route) => {
-    savedObserver = route.request().headers()['x-observer-key'];
-    registered = true;
-    await route.fulfill({ status: 204 });
-  });
   await page.route('**/api/v1/alert', async (route) => {
     expect(route.request().headers().authorization).toBe(`Bearer ${token}`);
     if (route.request().method() === 'POST') {
       active = true;
       await route.fulfill({ json: { notified: true } });
     } else if (route.request().method() === 'DELETE') {
-      expect(route.request().headers()['x-observer-key']).toBe(savedObserver);
+      expect(route.request().headers()['x-observer-key']).toBeUndefined();
       expect(route.request().headers()['x-alert-id']).toBe('0b08ff93-5e04-4e55-8cac-769f84050a20');
-      approvals = 1;
-      approved = true;
-      await route.fulfill({ json: state(savedObserver) });
+      active = false;
+      await route.fulfill({ json: state() });
     } else {
-      await route.fulfill({ json: state(route.request().headers()['x-observer-key']) });
+      await route.fulfill({ json: state() });
     }
   });
 
   await page.goto('/');
   await page.getByLabel('Ключ группы').fill(token);
   await page.getByRole('button', { name: 'Открыть карту' }).click();
-  await expect(page.getByRole('link', { name: 'Подключить уведомления' })).toHaveAttribute('href', 'https://notify.example/rollcall-random');
+  await expect(page.getByRole('link', { name: 'Открыть подписку в ntfy' })).toHaveAttribute('href', 'https://notify.example/rollcall-random');
   await page.getByRole('button', { name: 'Скопировать адрес подписки ntfy' }).click();
   await expect(page.getByText('Адрес подписки ntfy скопирован.')).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('https://notify.example/rollcall-random');
   await page.getByRole('button', { name: 'Оповестить наблюдателей' }).click();
-  await expect(page.getByText(/Предупреждение активно/)).toBeVisible();
-  await page.getByRole('button', { name: 'Подтвердить снятие' }).click();
-  await expect(page.getByText(/Предупреждение активно · 1 из 2/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Вы подтвердили' })).toBeDisabled();
-  await page.reload();
-  await page.getByLabel('Ключ группы').fill(token);
-  await page.getByRole('button', { name: 'Открыть карту' }).click();
-  await expect(page.getByRole('button', { name: 'Вы подтвердили' })).toBeDisabled();
-  active = false;
-  await expect(page.getByText(/Предупреждение активно/)).toBeHidden({ timeout: 10000 });
+  await expect(page.getByText('Предупреждение активно')).toBeVisible();
+  await page.getByRole('button', { name: 'Снять' }).click();
+  await expect(page.getByText('Предупреждение активно')).toBeHidden();
 });
 
 test('shows when ntfy did not accept a warning', async ({ page }) => {

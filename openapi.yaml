@@ -186,7 +186,7 @@ paths:
           $ref: '#/components/responses/Unavailable'
     delete:
       operationId: clearAlert
-      summary: Confirm that an active warning can be cleared
+      summary: Clear an active warning
       parameters:
         - name: X-Alert-Id
           in: header
@@ -194,26 +194,19 @@ paths:
           schema:
             type: string
             format: uuid
-          description: Идентификатор предупреждения, которое наблюдатель подтверждает.
-        - $ref: '#/components/parameters/ObserverKey'
+          description: Идентификатор предупреждения, которое нужно снять.
       security:
         - groupToken: []
         - viewToken: []
       responses:
         '200':
-          description: Текущее состояние после подтверждения. Предупреждение снимается при большинстве и не менее двух голосах.
+          description: Текущее состояние после снятия предупреждения любым наблюдателем.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlertState'
         '409':
           description: Предупреждение уже изменилось; обновите состояние.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: Браузер не зарегистрирован как наблюдатель.
           content:
             application/json:
               schema:
@@ -227,6 +220,7 @@ paths:
   /api/v1/observers:
     post:
       operationId: registerObserver
+      deprecated: true
       summary: Register a browser as a group observer
       parameters:
         - $ref: '#/components/parameters/ObserverKey'
@@ -261,7 +255,7 @@ components:
     viewToken:
       type: http
       scheme: bearer
-      description: Ключ с префиксом `view_` для чтения событий, включения предупреждения и голосования о его снятии.
+      description: Ключ с префиксом `view_` для чтения событий, включения и снятия предупреждения.
   responses:
     BadRequest:
       description: Некорректный JSON, формат пачки, `limit` или `cursor`.
@@ -313,14 +307,19 @@ components:
           description: Идентификатор текущего предупреждения; null, если оно снято.
         observers:
           type: integer
+          description: Сохранено для совместимости; регистрация для снятия больше не нужна.
         approvals:
           type: integer
+          description: Сохранено для совместимости; голосование отключено.
         required_approvals:
           type: integer
+          description: Для снятия достаточно одного наблюдателя.
         registered:
           type: boolean
+          description: Сохранено для совместимости; регистрация больше не нужна.
         approved:
           type: boolean
+          description: Сохранено для совместимости; голосование отключено.
         subscription_url:
           type: string
           format: uri

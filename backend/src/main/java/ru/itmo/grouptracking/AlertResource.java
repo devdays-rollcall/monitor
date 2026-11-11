@@ -103,7 +103,7 @@ public class AlertResource {
                 validator.groupHash(
                         readOnly ? "Bearer " + authorization.substring(12) : authorization);
         byte[] observer =
-                observerKey == null && action != Action.REGISTER && action != Action.CONFIRM
+                observerKey == null && action != Action.REGISTER
                         ? null
                         : HexFormat.of().parseHex(validator.groupHash("Bearer " + observerKey));
 
@@ -148,26 +148,11 @@ public class AlertResource {
                 if (action == Action.CONFIRM) {
                     if (!active || currentAlert == null || !currentAlert.toString().equals(alertId))
                         throw new ApiFailure(409, "alert_changed", "alert has changed");
-                    if (!state.registered())
-                        throw new ApiFailure(
-                                403, "observer_not_registered", "observer is not registered");
-                    if (active) {
-                        try (var statement =
-                                connection.prepareStatement(
-                                        "insert into alert_approvals (group_id, observer_hash) values (?, ?) on conflict do nothing")) {
-                            statement.setLong(1, groupId);
-                            statement.setBytes(2, observer);
-                            statement.executeUpdate();
-                        }
-                        state = counts(connection, groupId, observer);
-                        if (state.approvals() >= Math.max(2, state.observers() / 2 + 1)) {
-                            updateActive(connection, groupId, false, null);
-                            currentAlert = null;
-                            deleteApprovals(connection, groupId);
-                            active = false;
-                            state = counts(connection, groupId, observer);
-                        }
-                    }
+                    updateActive(connection, groupId, false, null);
+                    currentAlert = null;
+                    deleteApprovals(connection, groupId);
+                    active = false;
+                    state = counts(connection, groupId, observer);
                 }
                 connection.commit();
                 return new AlertState()
@@ -176,7 +161,7 @@ public class AlertResource {
                         .subscriptionUrl(URI.create(publicUrl + "/rollcall-" + topic))
                         .observers(state.observers())
                         .approvals(state.approvals())
-                        .requiredApprovals(Math.max(2, state.observers() / 2 + 1))
+                        .requiredApprovals(1)
                         .registered(state.registered())
                         .approved(state.approved());
             } catch (SQLException | RuntimeException exception) {

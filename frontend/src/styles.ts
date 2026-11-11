@@ -288,7 +288,17 @@ export const AlertBanner = styled.div`
   @media (max-width: 760px) { top: 60px; width: max-content; }
 `;
 
+export const AlertAction = styled(Button)`
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 36px; padding: 0 12px; border: 0; border-radius: 10px;
+  background: rgba(231, 171, 65, .24); color: #674700; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  @media (hover: hover) { &:hover:not(:disabled) { background: rgba(231, 171, 65, .34); } }
+  &:active:not(:disabled) { background: rgba(231, 171, 65, .44); }
+  &:disabled { opacity: .55; cursor: wait; }
+`;
+
 export const AlertControls = styled.div`
-  display: flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--muted); font-size: 12px;
-  a { color: inherit; text-underline-offset: 2px; }
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px;
+  a { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 6px; color: var(--muted); font-size: 13px; text-decoration: none; }
+  a:hover { color: var(--ink); }
 `;
