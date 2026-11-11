@@ -10,12 +10,14 @@ from test_api import BASE_URL, request, token, wait_for_group
 
 
 class AlertTest(unittest.TestCase):
-    def call(self, method, key, observer=None, path="/api/v1/alert", alert_id=None, source=None):
+    def call(self, method, key, observer=None, path="/api/v1/alert", alert_id=None, source=None, member=None):
         headers = {'Authorization': 'Bearer ' + key}
         if observer:
             headers['X-Observer-Key'] = observer
         if source:
             headers['X-Alert-Source'] = source
+        if member:
+            headers['X-Alert-Member-Id'] = member
         if alert_id:
             headers['X-Alert-Id'] = alert_id
         req = urllib.request.Request(BASE_URL + path, method=method, headers=headers)
@@ -56,22 +58,33 @@ class AlertTest(unittest.TestCase):
 
         self.assertEqual(403, self.call('POST', view, source='sos')[0])
         self.assertEqual(400, self.call('POST', group, source='invalid')[0])
-        self.assertEqual((200, {'notified': True}), self.call('POST', group, source='sos'))
+        self.assertEqual(400, self.call('POST', group, source='sos', member='bad')[0])
+        member = str(uuid.uuid4())
+        self.assertEqual((200, {'notified': True}), self.call('POST', group, source='sos', member=member))
         sos = self.call('GET', view)[1]
         self.assertEqual('sos', sos['source'])
+        self.assertEqual(member, sos['member_id'])
+        self.assertEqual((200, {'notified': True}), self.call('POST', group, source='sos'))
+        self.assertEqual(member, self.call('GET', view)[1]['member_id'])
         self.assertNotEqual(alert_id, sos['alert_id'])
         self.assertEqual(409, self.call('DELETE', view, alert_id=alert_id)[0])
         self.assertEqual((200, {'notified': True}), self.call('POST', view))
         self.assertEqual('sos', self.call('GET', group)[1]['source'])
         with urllib.request.urlopen(ntfy_url + path + '/json?poll=1', timeout=10) as response:
             messages = [json.loads(line) for line in response if line.strip()]
-        self.assertTrue(any('SOS' in message['message'] for message in messages))
+        self.assertTrue(any('SOS' in message['message'] and member in message['message'] for message in messages))
+        other = str(uuid.uuid4())
+        self.assertEqual((200, {'notified': True}), self.call('POST', group, source='sos', member=other))
+        self.assertEqual(409, self.call('DELETE', view, alert_id=sos['alert_id'])[0])
+        sos = self.call('GET', view)[1]
+        self.assertEqual(other, sos['member_id'])
         alert_id = sos['alert_id']
 
         status, cleared = self.call('DELETE', view, alert_id=alert_id)
         self.assertEqual(200, status)
         self.assertFalse(cleared['active'])
         self.assertIsNone(cleared.get('source'))
+        self.assertIsNone(cleared.get('member_id'))
         self.assertFalse(self.call('GET', group)[1]['active'])
         self.assertEqual((200, {'notified': True}), self.call('POST', view))
         fresh = self.call('GET', view)[1]

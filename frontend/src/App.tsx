@@ -274,7 +274,7 @@ export default function App() {
         </Welcome>
       ) : (
         <Workspace>
-          {alert?.active && <AlertBanner role="status" $sos={alert.source === 'sos'}><CircleAlert size={18} /><span>{alert.source === 'sos' ? 'SOS от участника' : alert.source === 'observer' ? 'Предупреждение наблюдателя' : 'Предупреждение активно'}</span><button type="button" disabled={alertBusy !== null} onClick={() => void updateAlert(false)}>{alertBusy === 'clear' ? 'Снимаем…' : 'Снять'}</button></AlertBanner>}
+          {alert?.active && <AlertBanner role="status" $sos={alert.source === 'sos'}><CircleAlert size={18} /><span>{alert.source === 'sos' ? (alert.member_id ? `SOS от участника ${alert.member_id.slice(0, 8)}` : 'SOS от участника') : alert.source === 'observer' ? 'Предупреждение наблюдателя' : 'Предупреждение активно'}</span><button type="button" disabled={alertBusy !== null} onClick={() => void updateAlert(false)}>{alertBusy === 'clear' ? 'Снимаем…' : 'Снять'}</button></AlertBanner>}
           <MapArea aria-label="Карта маршрутов">
             {routes.length > 0 ? <MapView routes={routes} selectedMember={selectedMember} /> : <EmptyMap><MapIcon size={32} /><strong>{events.length ? 'Нет GPS-точек' : 'Пока нет событий'}</strong><p>Отправьте данные с телефона и обновите карту.</p></EmptyMap>}
           </MapArea>

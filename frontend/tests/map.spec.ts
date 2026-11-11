@@ -376,9 +376,9 @@ test('shows when ntfy did not accept a warning', async ({ page }) => {
 
 test('shows when the warning is an SOS', async ({ page }) => {
   await page.route('**/api/v1/events*', (route) => route.fulfill({ json: { events: [], next_cursor: null } }));
-  await page.route('**/api/v1/alert', (route) => route.fulfill({ json: { active: true, source: 'sos', alert_id: '0b08ff93-5e04-4e55-8cac-769f84050a20', subscription_url: 'https://notify.example/topic', observers: 0, approvals: 0, required_approvals: 1, registered: false, approved: false } }));
+  await page.route('**/api/v1/alert', (route) => route.fulfill({ json: { active: true, source: 'sos', member_id: '8c1e5b0a-3f2d-4c6e-9a7b-1d2e3f4a5b6c', alert_id: '0b08ff93-5e04-4e55-8cac-769f84050a20', subscription_url: 'https://notify.example/topic', observers: 0, approvals: 0, required_approvals: 1, registered: false, approved: false } }));
   await page.goto('/');
   await page.getByLabel('Ключ группы').fill(token);
   await page.getByRole('button', { name: 'Открыть карту' }).click();
-  await expect(page.getByText('SOS от участника')).toBeVisible();
+  await expect(page.getByText('SOS от участника 8c1e5b0a')).toBeVisible();
 });

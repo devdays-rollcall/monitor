@@ -177,6 +177,13 @@ paths:
             enum: [observer, sos]
             default: observer
           description: SOS может отправить только участник с ключом группы.
+        - name: X-Alert-Member-Id
+          in: header
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: UUID участника, отправившего SOS; отсутствует у старых клиентов.
       security:
         - groupToken: []
         - viewToken: []
@@ -327,6 +334,11 @@ components:
           enum: [observer, sos, unknown]
           nullable: true
           description: Источник текущего предупреждения; неизвестен для прежних предупреждений.
+        member_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Участник последнего SOS; отсутствует, если его ID неизвестен.
         observers:
           type: integer
           description: Сохранено для совместимости; регистрация для снятия больше не нужна.

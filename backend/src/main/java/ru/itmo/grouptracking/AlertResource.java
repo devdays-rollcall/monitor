@@ -18,6 +18,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.HexFormat;
+import java.util.Objects;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -56,7 +57,7 @@ public class AlertResource {
     public Response get(
             @HeaderParam("Authorization") String authorization,
             @HeaderParam("X-Observer-Key") String observerKey) {
-        return Response.ok(execute(authorization, observerKey, null, Action.READ, null))
+        return Response.ok(execute(authorization, observerKey, null, Action.READ, null, null))
                 .header("Cache-Control", "no-store")
                 .build();
     }
@@ -65,15 +66,27 @@ public class AlertResource {
     @Path("/alert")
     public Response raise(
             @HeaderParam("Authorization") String authorization,
-            @HeaderParam("X-Alert-Source") String source) {
+            @HeaderParam("X-Alert-Source") String source,
+            @HeaderParam("X-Alert-Member-Id") String memberId) {
         if (source == null) source = "observer";
         if (!source.equals("observer") && !source.equals("sos"))
             throw new ApiFailure(400, "invalid_source", "invalid alert source");
-        var state = execute(authorization, null, null, Action.RAISE, source);
+        UUID member = null;
+        if (memberId != null) {
+            try {
+                member = UUID.fromString(memberId);
+                if (!member.toString().equalsIgnoreCase(memberId)
+                        || member.version() != 4
+                        || !source.equals("sos")) throw new IllegalArgumentException();
+            } catch (IllegalArgumentException exception) {
+                throw new ApiFailure(400, "invalid_member", "invalid SOS member id");
+            }
+        }
+        var state = execute(authorization, null, null, Action.RAISE, source, member);
         var topic =
                 UUID.fromString(
                         state.getSubscriptionUrl().getPath().substring("/rollcall-".length()));
-        return Response.ok(new AlertResult().notified(notify(topic, source)))
+        return Response.ok(new AlertResult().notified(notify(topic, source, member)))
                 .header("Cache-Control", "no-store")
                 .build();
     }
@@ -84,7 +97,7 @@ public class AlertResource {
             @HeaderParam("Authorization") String authorization,
             @HeaderParam("X-Observer-Key") String observerKey,
             @HeaderParam("X-Alert-Id") String alertId) {
-        return Response.ok(execute(authorization, observerKey, alertId, Action.CONFIRM, null))
+        return Response.ok(execute(authorization, observerKey, alertId, Action.CONFIRM, null, null))
                 .header("Cache-Control", "no-store")
                 .build();
     }
@@ -94,7 +107,7 @@ public class AlertResource {
     public Response register(
             @HeaderParam("Authorization") String authorization,
             @HeaderParam("X-Observer-Key") String observerKey) {
-        execute(authorization, observerKey, null, Action.REGISTER, null);
+        execute(authorization, observerKey, null, Action.REGISTER, null, null);
         return Response.noContent().header("Cache-Control", "no-store").build();
     }
 
@@ -103,7 +116,8 @@ public class AlertResource {
             String observerKey,
             String alertId,
             Action action,
-            String source) {
+            String source,
+            UUID member) {
         boolean readOnly =
                 authorization != null
                         && authorization.length() == 55
@@ -123,12 +137,13 @@ public class AlertResource {
             try {
                 long groupId = store.findGroup(connection, hash, readOnly);
                 var sql =
-                        "select notification_topic, alert_active, alert_id, alert_source from groups where id = ?"
+                        "select notification_topic, alert_active, alert_id, alert_source, alert_member_id from groups where id = ?"
                                 + (action == Action.READ ? "" : " for update");
                 UUID topic;
                 boolean active;
                 UUID currentAlert;
                 String currentSource;
+                UUID currentMember;
                 try (var statement = connection.prepareStatement(sql)) {
                     statement.setLong(1, groupId);
                     try (var result = statement.executeQuery()) {
@@ -138,6 +153,7 @@ public class AlertResource {
                         active = result.getBoolean(2);
                         currentAlert = result.getObject(3, UUID.class);
                         currentSource = result.getString(4);
+                        currentMember = result.getObject(5, UUID.class);
                     }
                 }
 
@@ -151,10 +167,17 @@ public class AlertResource {
                     }
                 }
                 if (action == Action.RAISE
-                        && (!active || (source.equals("sos") && !"sos".equals(currentSource)))) {
+                        && (!active
+                                || (source.equals("sos")
+                                        && (!"sos".equals(currentSource)
+                                                || (member != null
+                                                        && !Objects.equals(
+                                                                member, currentMember)))))) {
                     currentAlert = UUID.randomUUID();
                     currentSource = source;
-                    updateActive(connection, groupId, true, currentAlert, currentSource);
+                    currentMember = member;
+                    updateActive(
+                            connection, groupId, true, currentAlert, currentSource, currentMember);
                     deleteApprovals(connection, groupId);
                     active = true;
                 }
@@ -163,7 +186,8 @@ public class AlertResource {
                 if (action == Action.CONFIRM) {
                     if (!active || currentAlert == null || !currentAlert.toString().equals(alertId))
                         throw new ApiFailure(409, "alert_changed", "alert has changed");
-                    updateActive(connection, groupId, false, null, null);
+                    updateActive(connection, groupId, false, null, null, null);
+                    currentMember = null;
                     currentSource = null;
                     currentAlert = null;
                     deleteApprovals(connection, groupId);
@@ -174,6 +198,7 @@ public class AlertResource {
                 return new AlertState()
                         .active(active)
                         .alertId(currentAlert)
+                        .memberId(active ? currentMember : null)
                         .source(
                                 active
                                         ? AlertState.SourceEnum.fromValue(
@@ -223,15 +248,21 @@ public class AlertResource {
     }
 
     private void updateActive(
-            Connection connection, long groupId, boolean active, UUID alertId, String source)
+            Connection connection,
+            long groupId,
+            boolean active,
+            UUID alertId,
+            String source,
+            UUID member)
             throws SQLException {
         try (var statement =
                 connection.prepareStatement(
-                        "update groups set alert_active = ?, alert_id = ?, alert_source = ? where id = ?")) {
+                        "update groups set alert_active = ?, alert_id = ?, alert_source = ?, alert_member_id = ? where id = ?")) {
             statement.setBoolean(1, active);
             statement.setObject(2, alertId);
             statement.setString(3, source);
-            statement.setLong(4, groupId);
+            statement.setObject(4, member);
+            statement.setLong(5, groupId);
             statement.executeUpdate();
         }
     }
@@ -244,7 +275,7 @@ public class AlertResource {
         }
     }
 
-    private boolean notify(UUID topic, String source) {
+    private boolean notify(UUID topic, String source, UUID member) {
         var request =
                 HttpRequest.newBuilder(URI.create(internalUrl + "/rollcall-" + topic))
                         .timeout(Duration.ofSeconds(10))
@@ -253,7 +284,11 @@ public class AlertResource {
                         .POST(
                                 HttpRequest.BodyPublishers.ofString(
                                         source.equals("sos")
-                                                ? "Участник группы отправил SOS. Проверьте маршрут."
+                                                ? (member == null
+                                                        ? "Участник группы отправил SOS. Проверьте маршрут."
+                                                        : "SOS от участника "
+                                                                + member
+                                                                + ". Проверьте маршрут.")
                                                 : "Наблюдатель просит проверить маршрут группы."))
                         .build();
         try {
