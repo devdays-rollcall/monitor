@@ -228,8 +228,7 @@ public class EventStore {
         }
     }
 
-    private long findGroup(Connection connection, String groupHash, boolean readOnly)
-            throws SQLException {
+    long findGroup(Connection connection, String groupHash, boolean readOnly) throws SQLException {
         var sql =
                 readOnly
                         ? "select group_id from share_tokens where token_hash = ?"

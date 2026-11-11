@@ -277,3 +277,18 @@ export const EmptyMap = styled.div`
   strong { color: var(--ink); font-size: 17px; }
   p { margin: 8px 0 0; font-size: 14px; }
 `;
+
+export const AlertBanner = styled.div`
+  position: absolute; z-index: 900; top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: calc(100% - 32px);
+  padding: 9px 12px; border-radius: 12px; background: rgba(255, 232, 161, .9);
+  color: #634600; font-size: 13px; font-weight: 600; backdrop-filter: var(--glass-blur);
+  button, a { border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+  button:disabled { opacity: .55; }
+  @media (max-width: 760px) { top: 60px; width: max-content; }
+`;
+
+export const AlertControls = styled.div`
+  display: flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--muted); font-size: 12px;
+  a { color: inherit; text-underline-offset: 2px; }
+`;

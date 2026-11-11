@@ -11,6 +11,7 @@ const members = [
 
 test.beforeEach(async ({ context }) => {
   await context.route('https://mc.yandex.ru/**', (route) => route.abort());
+  await context.route('**/api/v1/alert', (route) => route.fulfill({ json: { active: false, alert_id: null, subscription_url: 'https://notify.example/topic', observers: 0, approvals: 0, required_approvals: 2, registered: false, approved: false } }));
 });
 
 function event(member: string, index: number, minute: number): EventOutput {
@@ -320,4 +321,72 @@ test('shows progress and errors when sharing, and allows retrying', async ({ pag
   await share.click();
   await expect(page.getByRole('status')).toContainText('Ссылка скопирована');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+});
+
+test('observers vote to clear a warning and can copy notification subscription', async ({ page, context }) => {
+  let active = false;
+  let registered = false;
+  let approved = false;
+  let approvals = 0;
+  let savedObserver = '';
+  const state = (key?: string) => ({ active, alert_id: active ? '0b08ff93-5e04-4e55-8cac-769f84050a20' : null, subscription_url: 'https://notify.example/rollcall-random', observers: 2, approvals, required_approvals: 2, registered: registered && key === savedObserver, approved: approved && key === savedObserver });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.route('**/api/v1/events*', (route) => route.fulfill({ json: { events: [], next_cursor: null } }));
+  await page.route('**/api/v1/observers', async (route) => {
+    savedObserver = route.request().headers()['x-observer-key'];
+    registered = true;
+    await route.fulfill({ status: 204 });
+  });
+  await page.route('**/api/v1/alert', async (route) => {
+    expect(route.request().headers().authorization).toBe(`Bearer ${token}`);
+    if (route.request().method() === 'POST') {
+      active = true;
+      await route.fulfill({ json: { notified: true } });
+    } else if (route.request().method() === 'DELETE') {
+      expect(route.request().headers()['x-observer-key']).toBe(savedObserver);
+      expect(route.request().headers()['x-alert-id']).toBe('0b08ff93-5e04-4e55-8cac-769f84050a20');
+      approvals = 1;
+      approved = true;
+      await route.fulfill({ json: state(savedObserver) });
+    } else {
+      await route.fulfill({ json: state(route.request().headers()['x-observer-key']) });
+    }
+  });
+
+  await page.goto('/');
+  await page.getByLabel('Ключ группы').fill(token);
+  await page.getByRole('button', { name: 'Открыть карту' }).click();
+  await expect(page.getByRole('link', { name: 'Подключить уведомления' })).toHaveAttribute('href', 'https://notify.example/rollcall-random');
+  await page.getByRole('button', { name: 'Скопировать адрес подписки ntfy' }).click();
+  await expect(page.getByText('Адрес подписки ntfy скопирован.')).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('https://notify.example/rollcall-random');
+  await page.getByRole('button', { name: 'Оповестить наблюдателей' }).click();
+  await expect(page.getByText(/Предупреждение активно/)).toBeVisible();
+  await page.getByRole('button', { name: 'Подтвердить снятие' }).click();
+  await expect(page.getByText(/Предупреждение активно · 1 из 2/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Вы подтвердили' })).toBeDisabled();
+  await page.reload();
+  await page.getByLabel('Ключ группы').fill(token);
+  await page.getByRole('button', { name: 'Открыть карту' }).click();
+  await expect(page.getByRole('button', { name: 'Вы подтвердили' })).toBeDisabled();
+  active = false;
+  await expect(page.getByText(/Предупреждение активно/)).toBeHidden({ timeout: 10000 });
+});
+
+test('shows when ntfy did not accept a warning', async ({ page }) => {
+  let active = false;
+  await page.route('**/api/v1/events*', (route) => route.fulfill({ json: { events: [], next_cursor: null } }));
+  await page.route('**/api/v1/alert', (route) => {
+    if (route.request().method() === 'POST') {
+      active = true;
+      return route.fulfill({ json: { notified: false } });
+    }
+    return route.fulfill({ json: { active, alert_id: active ? '0b08ff93-5e04-4e55-8cac-769f84050a20' : null, subscription_url: 'https://notify.example/topic', observers: 0, approvals: 0, required_approvals: 2, registered: false, approved: false } });
+  });
+  await page.goto('/');
+  await page.getByLabel('Ключ группы').fill(token);
+  await page.getByRole('button', { name: 'Открыть карту' }).click();
+  await page.getByRole('button', { name: 'Оповестить наблюдателей' }).click();
+  await expect(page.getByText(/Предупреждение активно/)).toBeVisible();
+  await expect(page.getByText(/ntfy не принял уведомление/)).toBeVisible();
 });

@@ -5,6 +5,8 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       APP_ROLE: api
+      NTFY_INTERNAL_URL: http://ntfy:80
+      NTFY_PUBLIC_URL: http://localhost:2586
       NATS_URL: nats://nats:4222
       QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/monitordb
       QUARKUS_DATASOURCE_USERNAME: user
@@ -46,6 +48,19 @@ services:
       retries: 20
     restart: always
 
+  ntfy:
+    image: binwiederhier/ntfy:v2.37.2
+    command: ["serve"]
+    environment:
+      NTFY_BASE_URL: http://localhost:2586
+      NTFY_LISTEN_HTTP: :80
+      NTFY_CACHE_FILE: /var/cache/ntfy/cache.db
+    ports:
+      - "2586:80"
+    volumes:
+      - ntfy-cache:/var/cache/ntfy
+    restart: always
+
   nginx:
     image: nginx:1.29-alpine
     volumes:
@@ -57,4 +72,5 @@ services:
 
 volumes:
   postgres-data:
+  ntfy-cache:
   nats-data:
