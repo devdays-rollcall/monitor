@@ -17,6 +17,7 @@ docker compose exec -T postgres psql -U user -d monitordb -v ON_ERROR_STOP=1 < b
 docker compose exec -T postgres psql -U user -d monitordb -v ON_ERROR_STOP=1 < backend/migrations/002_share_tokens.sql
 docker compose exec -T postgres psql -U user -d monitordb -v ON_ERROR_STOP=1 < backend/migrations/003_alerts.sql
 docker compose exec -T postgres psql -U user -d monitordb -v ON_ERROR_STOP=1 < backend/migrations/004_alert_voting.sql
+docker compose exec -T postgres psql -U user -d monitordb -v ON_ERROR_STOP=1 < backend/migrations/005_alert_source.sql
 ```
 
 При повторном запуске существующего тома миграцию повторять не нужно. Сайт и API доступны через Nginx на `http://localhost:8080`. PostgreSQL и NATS хранят данные в Docker volumes.
@@ -61,13 +62,13 @@ curl 'http://localhost:8080/api/v1/events?limit=500' \
 
 ## Предупреждения и ntfy
 
-Наблюдатель с ключом группы или просмотра может включить и снять предупреждение на карте. Состояние хранится в PostgreSQL и обновляется на открытых страницах примерно раз в пять секунд. При включении backend отправляет сообщение через ntfy. Если ntfy недоступен, предупреждение остаётся активным, а сайт показывает ошибку; повторное нажатие отправляет уведомление ещё раз. Подтверждение ntfy не гарантирует доставку каждому устройству.
+Наблюдатель с ключом группы или просмотра может включить и снять предупреждение на карте. SOS участника отображается отдельно и имеет приоритет над предупреждением наблюдателя. Состояние хранится в PostgreSQL и обновляется на открытых страницах примерно раз в пять секунд. При включении backend отправляет сообщение через ntfy. Если ntfy недоступен, предупреждение остаётся активным, а сайт показывает ошибку; повторное нажатие отправляет уведомление ещё раз. Подтверждение ntfy не гарантирует доставку каждому устройству.
 
 Ссылка ntfy открывает тему группы, где можно подписаться и разрешить уведомления. Рядом можно скопировать адрес для мобильного приложения ntfy. Локально ntfy доступен на `http://localhost:2586`; для других устройств нужен доступный им адрес. Топик содержит случайный идентификатор и не содержит ключ группы или координаты. Сервер ntfy доступен без авторизации: любой, кто узнал адрес топика, сможет читать и публиковать сообщения; не отправляйте туда чувствительные данные.
 
 Для production укажите `NTFY_PUBLIC_URL=https://notify.rollcall.vareonix.cc`. Создайте VAPID-ключи командой `docker run --rm binwiederhier/ntfy:v2.37.2 webpush keys` и сохраните значения в приватном `.env` как `NTFY_WEB_PUSH_PUBLIC_KEY` и `NTFY_WEB_PUSH_PRIVATE_KEY`; также задайте `NTFY_WEB_PUSH_EMAIL_ADDRESS`. Эти ключи должны оставаться неизменными после подписки пользователей. Настройте существующий HTTPS ingress для `notify.rollcall.vareonix.cc` с проксированием на `rollcall-ntfy:80` и поддержкой долгих соединений. Контейнер ntfy использует постоянный том для сообщений и браузерных подписок. `NTFY_UPSTREAM_BASE_URL=https://ntfy.sh` нужен для оперативной доставки в приложение ntfy на iOS.
 
-Фоновые браузерные уведомления зависят от разрешения пользователя и поддержки браузера; на iOS веб-приложение требуется добавить на домашний экран. Открытая вкладка ntfy получает уведомления без фоновой подписки. После изменения существующей базы вручную примените ещё не применённые миграции `backend/migrations/003_alerts.sql` и `backend/migrations/004_alert_voting.sql`.
+Фоновые браузерные уведомления зависят от разрешения пользователя и поддержки браузера; на iOS веб-приложение требуется добавить на домашний экран. Открытая вкладка ntfy получает уведомления без фоновой подписки. После изменения существующей базы вручную примените ещё не применённые миграции `backend/migrations/003_alerts.sql`, `backend/migrations/004_alert_voting.sql` и `backend/migrations/005_alert_source.sql`.
 
 ## Разработка
 
@@ -95,7 +96,7 @@ create role "user" login;
 create database monitordb owner "user";
 ```
 
-Пароль задаётся интерактивно. После этого вручную примените `backend/migrations/001_init.sql`, `backend/migrations/002_share_tokens.sql`, `backend/migrations/003_alerts.sql` и `backend/migrations/004_alert_voting.sql` к новой базе от имени `user`.
+Пароль задаётся интерактивно. После этого вручную примените `backend/migrations/001_init.sql`, `backend/migrations/002_share_tokens.sql`, `backend/migrations/003_alerts.sql`, `backend/migrations/004_alert_voting.sql` и `backend/migrations/005_alert_source.sql` к новой базе от имени `user`.
 
 Соберите фронтенд локально и скопируйте результат в каталог сервера до обновления ingress:
 

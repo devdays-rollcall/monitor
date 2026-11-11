@@ -56,19 +56,24 @@ public class AlertResource {
     public Response get(
             @HeaderParam("Authorization") String authorization,
             @HeaderParam("X-Observer-Key") String observerKey) {
-        return Response.ok(execute(authorization, observerKey, null, Action.READ))
+        return Response.ok(execute(authorization, observerKey, null, Action.READ, null))
                 .header("Cache-Control", "no-store")
                 .build();
     }
 
     @POST
     @Path("/alert")
-    public Response raise(@HeaderParam("Authorization") String authorization) {
-        var state = execute(authorization, null, null, Action.RAISE);
+    public Response raise(
+            @HeaderParam("Authorization") String authorization,
+            @HeaderParam("X-Alert-Source") String source) {
+        if (source == null) source = "observer";
+        if (!source.equals("observer") && !source.equals("sos"))
+            throw new ApiFailure(400, "invalid_source", "invalid alert source");
+        var state = execute(authorization, null, null, Action.RAISE, source);
         var topic =
                 UUID.fromString(
                         state.getSubscriptionUrl().getPath().substring("/rollcall-".length()));
-        return Response.ok(new AlertResult().notified(notify(topic)))
+        return Response.ok(new AlertResult().notified(notify(topic, source)))
                 .header("Cache-Control", "no-store")
                 .build();
     }
@@ -79,7 +84,7 @@ public class AlertResource {
             @HeaderParam("Authorization") String authorization,
             @HeaderParam("X-Observer-Key") String observerKey,
             @HeaderParam("X-Alert-Id") String alertId) {
-        return Response.ok(execute(authorization, observerKey, alertId, Action.CONFIRM))
+        return Response.ok(execute(authorization, observerKey, alertId, Action.CONFIRM, null))
                 .header("Cache-Control", "no-store")
                 .build();
     }
@@ -89,16 +94,22 @@ public class AlertResource {
     public Response register(
             @HeaderParam("Authorization") String authorization,
             @HeaderParam("X-Observer-Key") String observerKey) {
-        execute(authorization, observerKey, null, Action.REGISTER);
+        execute(authorization, observerKey, null, Action.REGISTER, null);
         return Response.noContent().header("Cache-Control", "no-store").build();
     }
 
     private AlertState execute(
-            String authorization, String observerKey, String alertId, Action action) {
+            String authorization,
+            String observerKey,
+            String alertId,
+            Action action,
+            String source) {
         boolean readOnly =
                 authorization != null
                         && authorization.length() == 55
                         && authorization.startsWith("Bearer view_");
+        if (readOnly && "sos".equals(source))
+            throw new ApiFailure(403, "forbidden", "SOS requires a group key");
         var hash =
                 validator.groupHash(
                         readOnly ? "Bearer " + authorization.substring(12) : authorization);
@@ -112,11 +123,12 @@ public class AlertResource {
             try {
                 long groupId = store.findGroup(connection, hash, readOnly);
                 var sql =
-                        "select notification_topic, alert_active, alert_id from groups where id = ?"
+                        "select notification_topic, alert_active, alert_id, alert_source from groups where id = ?"
                                 + (action == Action.READ ? "" : " for update");
                 UUID topic;
                 boolean active;
                 UUID currentAlert;
+                String currentSource;
                 try (var statement = connection.prepareStatement(sql)) {
                     statement.setLong(1, groupId);
                     try (var result = statement.executeQuery()) {
@@ -125,6 +137,7 @@ public class AlertResource {
                         topic = result.getObject(1, UUID.class);
                         active = result.getBoolean(2);
                         currentAlert = result.getObject(3, UUID.class);
+                        currentSource = result.getString(4);
                     }
                 }
 
@@ -137,9 +150,11 @@ public class AlertResource {
                         statement.executeUpdate();
                     }
                 }
-                if (action == Action.RAISE && !active) {
+                if (action == Action.RAISE
+                        && (!active || (source.equals("sos") && !"sos".equals(currentSource)))) {
                     currentAlert = UUID.randomUUID();
-                    updateActive(connection, groupId, true, currentAlert);
+                    currentSource = source;
+                    updateActive(connection, groupId, true, currentAlert, currentSource);
                     deleteApprovals(connection, groupId);
                     active = true;
                 }
@@ -148,7 +163,8 @@ public class AlertResource {
                 if (action == Action.CONFIRM) {
                     if (!active || currentAlert == null || !currentAlert.toString().equals(alertId))
                         throw new ApiFailure(409, "alert_changed", "alert has changed");
-                    updateActive(connection, groupId, false, null);
+                    updateActive(connection, groupId, false, null, null);
+                    currentSource = null;
                     currentAlert = null;
                     deleteApprovals(connection, groupId);
                     active = false;
@@ -158,6 +174,11 @@ public class AlertResource {
                 return new AlertState()
                         .active(active)
                         .alertId(currentAlert)
+                        .source(
+                                active
+                                        ? AlertState.SourceEnum.fromValue(
+                                                currentSource == null ? "unknown" : currentSource)
+                                        : null)
                         .subscriptionUrl(URI.create(publicUrl + "/rollcall-" + topic))
                         .observers(state.observers())
                         .approvals(state.approvals())
@@ -201,14 +222,16 @@ public class AlertResource {
         }
     }
 
-    private void updateActive(Connection connection, long groupId, boolean active, UUID alertId)
+    private void updateActive(
+            Connection connection, long groupId, boolean active, UUID alertId, String source)
             throws SQLException {
         try (var statement =
                 connection.prepareStatement(
-                        "update groups set alert_active = ?, alert_id = ? where id = ?")) {
+                        "update groups set alert_active = ?, alert_id = ?, alert_source = ? where id = ?")) {
             statement.setBoolean(1, active);
             statement.setObject(2, alertId);
-            statement.setLong(3, groupId);
+            statement.setString(3, source);
+            statement.setLong(4, groupId);
             statement.executeUpdate();
         }
     }
@@ -221,7 +244,7 @@ public class AlertResource {
         }
     }
 
-    private boolean notify(UUID topic) {
+    private boolean notify(UUID topic, String source) {
         var request =
                 HttpRequest.newBuilder(URI.create(internalUrl + "/rollcall-" + topic))
                         .timeout(Duration.ofSeconds(10))
@@ -229,7 +252,9 @@ public class AlertResource {
                         .header("Priority", "high")
                         .POST(
                                 HttpRequest.BodyPublishers.ofString(
-                                        "Наблюдатель просит проверить маршрут группы."))
+                                        source.equals("sos")
+                                                ? "Участник группы отправил SOS. Проверьте маршрут."
+                                                : "Наблюдатель просит проверить маршрут группы."))
                         .build();
         try {
             return http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode() / 100

@@ -325,7 +325,7 @@ test('shows progress and errors when sharing, and allows retrying', async ({ pag
 
 test('any viewer can clear a warning and copy the ntfy address', async ({ page, context }) => {
   let active = false;
-  const state = () => ({ active, alert_id: active ? '0b08ff93-5e04-4e55-8cac-769f84050a20' : null, subscription_url: 'https://notify.example/rollcall-random', observers: 0, approvals: 0, required_approvals: 1, registered: false, approved: false });
+  const state = () => ({ active, source: active ? 'observer' : null, alert_id: active ? '0b08ff93-5e04-4e55-8cac-769f84050a20' : null, subscription_url: 'https://notify.example/rollcall-random', observers: 0, approvals: 0, required_approvals: 1, registered: false, approved: false });
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.route('**/api/v1/events*', (route) => route.fulfill({ json: { events: [], next_cursor: null } }));
   await page.route('**/api/v1/alert', async (route) => {
@@ -351,9 +351,9 @@ test('any viewer can clear a warning and copy the ntfy address', async ({ page, 
   await expect(page.getByText('Адрес подписки ntfy скопирован.')).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('https://notify.example/rollcall-random');
   await page.getByRole('button', { name: 'Оповестить наблюдателей' }).click();
-  await expect(page.getByText('Предупреждение активно')).toBeVisible();
+  await expect(page.getByText('Предупреждение наблюдателя')).toBeVisible();
   await page.getByRole('button', { name: 'Снять' }).click();
-  await expect(page.getByText('Предупреждение активно')).toBeHidden();
+  await expect(page.getByText('Предупреждение наблюдателя')).toBeHidden();
 });
 
 test('shows when ntfy did not accept a warning', async ({ page }) => {
@@ -372,4 +372,13 @@ test('shows when ntfy did not accept a warning', async ({ page }) => {
   await page.getByRole('button', { name: 'Оповестить наблюдателей' }).click();
   await expect(page.getByText(/Предупреждение активно/)).toBeVisible();
   await expect(page.getByText(/ntfy не принял уведомление/)).toBeVisible();
+});
+
+test('shows when the warning is an SOS', async ({ page }) => {
+  await page.route('**/api/v1/events*', (route) => route.fulfill({ json: { events: [], next_cursor: null } }));
+  await page.route('**/api/v1/alert', (route) => route.fulfill({ json: { active: true, source: 'sos', alert_id: '0b08ff93-5e04-4e55-8cac-769f84050a20', subscription_url: 'https://notify.example/topic', observers: 0, approvals: 0, required_approvals: 1, registered: false, approved: false } }));
+  await page.goto('/');
+  await page.getByLabel('Ключ группы').fill(token);
+  await page.getByRole('button', { name: 'Открыть карту' }).click();
+  await expect(page.getByText('SOS от участника')).toBeVisible();
 });

@@ -1,6 +1,6 @@
 services:
   rollcall-api:
-    image: ghcr.io/devdays-rollcall/monitor-backend:alert-single-clear-20261111
+    image: ghcr.io/devdays-rollcall/monitor-backend:alert-source-20261111
     environment:
       APP_ROLE: api
       NTFY_INTERNAL_URL: http://rollcall-ntfy:80

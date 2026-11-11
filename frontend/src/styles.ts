@@ -278,11 +278,11 @@ export const EmptyMap = styled.div`
   p { margin: 8px 0 0; font-size: 14px; }
 `;
 
-export const AlertBanner = styled.div`
+export const AlertBanner = styled.div<{ $sos?: boolean }>`
   position: absolute; z-index: 900; top: 14px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: calc(100% - 32px);
-  padding: 9px 12px; border-radius: 12px; background: rgba(255, 232, 161, .9);
-  color: #634600; font-size: 13px; font-weight: 600; backdrop-filter: var(--glass-blur);
+  padding: 9px 12px; border-radius: 12px; background: ${({ $sos }) => $sos ? 'rgba(255, 218, 212, .94)' : 'rgba(255, 232, 161, .9)'};
+  color: ${({ $sos }) => $sos ? '#8f251b' : '#634600'}; font-size: 13px; font-weight: 600; backdrop-filter: var(--glass-blur);
   button, a { border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
   button:disabled { opacity: .55; }
   @media (max-width: 760px) { top: 60px; width: max-content; }

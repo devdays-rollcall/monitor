@@ -168,6 +168,15 @@ paths:
     post:
       operationId: raiseAlert
       summary: Activate a warning and notify the group observers
+      parameters:
+        - name: X-Alert-Source
+          in: header
+          required: false
+          schema:
+            type: string
+            enum: [observer, sos]
+            default: observer
+          description: SOS может отправить только участник с ключом группы.
       security:
         - groupToken: []
         - viewToken: []
@@ -178,6 +187,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlertResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: Ключ просмотра не позволяет отправить SOS.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -305,6 +322,11 @@ components:
           format: uuid
           nullable: true
           description: Идентификатор текущего предупреждения; null, если оно снято.
+        source:
+          type: string
+          enum: [observer, sos, unknown]
+          nullable: true
+          description: Источник текущего предупреждения; неизвестен для прежних предупреждений.
         observers:
           type: integer
           description: Сохранено для совместимости; регистрация для снятия больше не нужна.

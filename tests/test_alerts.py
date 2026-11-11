@@ -10,10 +10,12 @@ from test_api import BASE_URL, request, token, wait_for_group
 
 
 class AlertTest(unittest.TestCase):
-    def call(self, method, key, observer=None, path="/api/v1/alert", alert_id=None):
+    def call(self, method, key, observer=None, path="/api/v1/alert", alert_id=None, source=None):
         headers = {'Authorization': 'Bearer ' + key}
         if observer:
             headers['X-Observer-Key'] = observer
+        if source:
+            headers['X-Alert-Source'] = source
         if alert_id:
             headers['X-Alert-Id'] = alert_id
         req = urllib.request.Request(BASE_URL + path, method=method, headers=headers)
@@ -40,6 +42,7 @@ class AlertTest(unittest.TestCase):
         self.assertEqual((200, {'notified': True}), self.call('POST', view))
         current = self.call('GET', group)[1]
         self.assertTrue(current['active'])
+        self.assertEqual('observer', current['source'])
         alert_id = current['alert_id']
 
         ntfy_url = os.environ.get('NTFY_TEST_URL', 'http://localhost:2586').rstrip('/')
@@ -51,9 +54,24 @@ class AlertTest(unittest.TestCase):
         self.assertNotIn(group, str(messages))
         self.assertNotIn(view, str(messages))
 
+        self.assertEqual(403, self.call('POST', view, source='sos')[0])
+        self.assertEqual(400, self.call('POST', group, source='invalid')[0])
+        self.assertEqual((200, {'notified': True}), self.call('POST', group, source='sos'))
+        sos = self.call('GET', view)[1]
+        self.assertEqual('sos', sos['source'])
+        self.assertNotEqual(alert_id, sos['alert_id'])
+        self.assertEqual(409, self.call('DELETE', view, alert_id=alert_id)[0])
+        self.assertEqual((200, {'notified': True}), self.call('POST', view))
+        self.assertEqual('sos', self.call('GET', group)[1]['source'])
+        with urllib.request.urlopen(ntfy_url + path + '/json?poll=1', timeout=10) as response:
+            messages = [json.loads(line) for line in response if line.strip()]
+        self.assertTrue(any('SOS' in message['message'] for message in messages))
+        alert_id = sos['alert_id']
+
         status, cleared = self.call('DELETE', view, alert_id=alert_id)
         self.assertEqual(200, status)
         self.assertFalse(cleared['active'])
+        self.assertIsNone(cleared.get('source'))
         self.assertFalse(self.call('GET', group)[1]['active'])
         self.assertEqual((200, {'notified': True}), self.call('POST', view))
         fresh = self.call('GET', view)[1]
