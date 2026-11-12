@@ -86,7 +86,9 @@ public class AlertResource {
         var topic =
                 UUID.fromString(
                         state.getSubscriptionUrl().getPath().substring("/rollcall-".length()));
-        return Response.ok(new AlertResult().notified(notify(topic, source, member)))
+        return Response.ok(
+                        new AlertResult()
+                                .notified(notify(topic, source, member, state.getUsername())))
                 .header("Cache-Control", "no-store")
                 .build();
     }
@@ -194,11 +196,24 @@ public class AlertResource {
                     active = false;
                     state = counts(connection, groupId, observer);
                 }
+                String username = null;
+                if (active && currentMember != null) {
+                    try (var statement =
+                            connection.prepareStatement(
+                                    "select username from events where group_id = ? and member_id = ? and username is not null order by sequence desc limit 1")) {
+                        statement.setLong(1, groupId);
+                        statement.setObject(2, currentMember);
+                        try (var result = statement.executeQuery()) {
+                            if (result.next()) username = result.getString(1);
+                        }
+                    }
+                }
                 connection.commit();
                 return new AlertState()
                         .active(active)
                         .alertId(currentAlert)
                         .memberId(active ? currentMember : null)
+                        .username(username)
                         .source(
                                 active
                                         ? AlertState.SourceEnum.fromValue(
@@ -275,7 +290,7 @@ public class AlertResource {
         }
     }
 
-    private boolean notify(UUID topic, String source, UUID member) {
+    private boolean notify(UUID topic, String source, UUID member, String username) {
         var request =
                 HttpRequest.newBuilder(URI.create(internalUrl + "/rollcall-" + topic))
                         .timeout(Duration.ofSeconds(10))
@@ -287,7 +302,10 @@ public class AlertResource {
                                                 ? (member == null
                                                         ? "Участник группы отправил SOS. Проверьте маршрут."
                                                         : "SOS от участника "
-                                                                + member
+                                                                + (username == null
+                                                                        ? member
+                                                                        : username + " (" + member
+                                                                                + ")")
                                                                 + ". Проверьте маршрут.")
                                                 : "Наблюдатель просит проверить маршрут группы."))
                         .build();

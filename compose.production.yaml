@@ -1,6 +1,6 @@
 services:
   rollcall-api:
-    image: ghcr.io/devdays-rollcall/monitor-backend:alert-member-20261111
+    image: ghcr.io/devdays-rollcall/monitor-backend:username-20261112
     environment:
       APP_ROLE: api
       NTFY_INTERNAL_URL: http://rollcall-ntfy:80
@@ -14,7 +14,7 @@ services:
     restart: always
 
   rollcall-worker:
-    image: ghcr.io/devdays-rollcall/monitor-backend:release-23673b7
+    image: ghcr.io/devdays-rollcall/monitor-backend:username-20261112
     environment:
       APP_ROLE: worker
       NATS_URL: ${NATS_URL:?Set NATS_URL}

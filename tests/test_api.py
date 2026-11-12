@@ -111,6 +111,21 @@ def nats_command(wire):
 
 
 class HttpContractTest(unittest.TestCase):
+    def test_optional_username_round_trip_and_validation(self):
+        group = token()
+        member = str(uuid.uuid4())
+        point = event(member)
+        point['username'] = 'Аня'
+        self.assertEqual(202, request('POST', group, {'sender_id': member, 'events': [point]})[0])
+        self.assertEqual('Аня', wait_for_group(group, 1)['events'][0]['username'])
+        for invalid in ('', '  ', 'a' * 101, 42):
+            point = event(member)
+            point['username'] = invalid
+            self.assertEqual(422, request('POST', group, {'sender_id': member, 'events': [point]})[0])
+        point = event(member)
+        self.assertEqual(202, request('POST', group, {'sender_id': member, 'events': [point]})[0])
+        self.assertEqual(2, len(wait_for_group(group, 2)['events']))
+
     def test_share_token_allows_reading_but_not_writing(self):
         group_token = token()
         sender = str(uuid.uuid4())

@@ -103,8 +103,8 @@ public class EventStore {
         var data = mapper.writeValueAsString(event.getData());
         var sql =
                 """
-                insert into events (group_id, id, member_id, type, recorded_at, received_at, data)
-                values (?, ?, ?, ?, ?, ?, cast(? as jsonb))
+                insert into events (group_id, id, member_id, type, recorded_at, received_at, data, username)
+                values (?, ?, ?, ?, ?, ?, cast(? as jsonb), ?)
                 on conflict (group_id, id) do nothing
                 """;
 
@@ -116,6 +116,7 @@ public class EventStore {
             statement.setObject(5, event.getRecordedAt());
             statement.setObject(6, receivedAt);
             statement.setString(7, data);
+            statement.setString(8, event.getUsername());
 
             if (statement.executeUpdate() == 0 && !sameEvent(connection, groupId, event, data)) {
                 LOG.warnf("event conflict group_id=%d event_id=%s", groupId, event.getId());
@@ -127,7 +128,7 @@ public class EventStore {
             throws SQLException {
         var sql =
                 """
-                select member_id = ? and type = ? and recorded_at = ? and data = cast(? as jsonb)
+                select member_id = ? and type = ? and recorded_at = ? and data = cast(? as jsonb) and username is not distinct from ?
                 from events
                 where group_id = ? and id = ?
                 """;
@@ -137,8 +138,9 @@ public class EventStore {
             statement.setString(2, event.getType().toString());
             statement.setObject(3, event.getRecordedAt());
             statement.setString(4, data);
-            statement.setLong(5, groupId);
-            statement.setObject(6, event.getId());
+            statement.setString(5, event.getUsername());
+            statement.setLong(6, groupId);
+            statement.setObject(7, event.getId());
 
             try (var result = statement.executeQuery()) {
                 return result.next() && result.getBoolean(1);
@@ -171,7 +173,7 @@ public class EventStore {
             var sql =
                     """
                     select stored.sequence, stored.id, stored.member_id, stored.type,
-                           stored.recorded_at, stored.received_at, stored.data
+                           stored.recorded_at, stored.received_at, stored.data, stored.username
                     from (
                         select sequence from events
                         where group_id = ? and sequence > ?
@@ -179,7 +181,7 @@ public class EventStore {
                         limit ?
                     ) page
                     cross join lateral (
-                        select sequence, id, member_id, type, recorded_at, received_at, data
+                        select sequence, id, member_id, type, recorded_at, received_at, data, username
                         from events where sequence = page.sequence offset 0
                     ) stored
                     order by page.sequence
@@ -205,6 +207,7 @@ public class EventStore {
                                 new EventOutput()
                                         .id(result.getObject("id", UUID.class))
                                         .memberId(result.getObject("member_id", UUID.class))
+                                        .username(result.getString("username"))
                                         .type(
                                                 EventOutput.TypeEnum.fromValue(
                                                         result.getString("type")))

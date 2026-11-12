@@ -6,7 +6,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
-from test_api import BASE_URL, request, token, wait_for_group
+from test_api import BASE_URL, event, request, token, wait_for_group
 
 
 class AlertTest(unittest.TestCase):
@@ -60,10 +60,15 @@ class AlertTest(unittest.TestCase):
         self.assertEqual(400, self.call('POST', group, source='invalid')[0])
         self.assertEqual(400, self.call('POST', group, source='sos', member='bad')[0])
         member = str(uuid.uuid4())
+        point = event(member)
+        point['username'] = 'Аня'
+        self.assertEqual(202, request('POST', group, {'sender_id': member, 'events': [point]})[0])
+        self.assertEqual('Аня', wait_for_group(group, 1)['events'][0]['username'])
         self.assertEqual((200, {'notified': True}), self.call('POST', group, source='sos', member=member))
         sos = self.call('GET', view)[1]
         self.assertEqual('sos', sos['source'])
         self.assertEqual(member, sos['member_id'])
+        self.assertEqual('Аня', sos['username'])
         self.assertEqual((200, {'notified': True}), self.call('POST', group, source='sos'))
         self.assertEqual(member, self.call('GET', view)[1]['member_id'])
         self.assertNotEqual(alert_id, sos['alert_id'])
@@ -72,7 +77,7 @@ class AlertTest(unittest.TestCase):
         self.assertEqual('sos', self.call('GET', group)[1]['source'])
         with urllib.request.urlopen(ntfy_url + path + '/json?poll=1', timeout=10) as response:
             messages = [json.loads(line) for line in response if line.strip()]
-        self.assertTrue(any('SOS' in message['message'] and member in message['message'] for message in messages))
+        self.assertTrue(any('SOS' in message['message'] and f'Аня ({member})' in message['message'] for message in messages))
         other = str(uuid.uuid4())
         self.assertEqual((200, {'notified': True}), self.call('POST', group, source='sos', member=other))
         self.assertEqual(409, self.call('DELETE', view, alert_id=sos['alert_id'])[0])

@@ -339,6 +339,10 @@ components:
           format: uuid
           nullable: true
           description: Участник последнего SOS; отсутствует, если его ID неизвестен.
+        username:
+          type: string
+          nullable: true
+          description: Последнее известное имя участника, отправившего SOS.
         observers:
           type: integer
           description: Сохранено для совместимости; регистрация для снятия больше не нужна.
@@ -401,6 +405,12 @@ components:
           type: string
           format: uuid
           description: UUIDv4 участника, создавшего событие. Сохраняется на устройстве и не меняется в группе.
+        username:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 100
+          description: Имя участника на момент события; можно не передавать.
         type:
           type: string
           enum: [location]
@@ -425,6 +435,12 @@ components:
           type: string
           format: uuid
           description: UUID участника, создавшего событие.
+        username:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 100
+          description: Имя участника на момент события; можно не передавать.
         type:
           type: string
           enum: [location]

@@ -112,6 +112,15 @@ public class RequestValidator {
             throw invalidEvent("event id and member_id must be valid UUIDs");
         }
 
+        var username = event.get("username");
+        if (username != null
+                && !username.isNull()
+                && (!username.isTextual()
+                        || username.asText().isBlank()
+                        || username.asText().codePointCount(0, username.asText().length()) > 100)) {
+            throw invalidEvent("username must be a non-blank string of at most 100 characters");
+        }
+
         if (!event.path("type").isTextual() || !event.path("type").asText().equals("location")) {
             throw invalidEvent("event type must be location");
         }

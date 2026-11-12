@@ -12,6 +12,7 @@ setWorkerUrl(workerUrl);
 export type MemberRoute = {
   id: string;
   color: string;
+  username?: string | null;
   events: EventOutput[];
 };
 
@@ -23,7 +24,11 @@ export function formatTime(value: string): string {
     : new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-function PointDetails({ point }: { point: EventOutput }) {
+export function memberLabel(id: string, username?: string | null): string {
+  return username ? `${username} (${id})` : id;
+}
+
+function PointDetails({ point, username }: { point: EventOutput; username?: string | null }) {
   const { latitude, longitude, accuracy_m, altitude_m, speed_mps, bearing_deg, battery_percent, ...extra } = point.data;
   const hasReadings = speed_mps != null || bearing_deg != null || battery_percent != null || Object.keys(extra).length > 0;
 
@@ -58,7 +63,7 @@ function PointDetails({ point }: { point: EventOutput }) {
       <h3>Событие</h3>
       <dl>
         <div><dt>Тип</dt><dd>Координаты</dd></div>
-        <div className="point-detail-long"><dt>Участник</dt><dd tabIndex={0} aria-label="Участник">{point.member_id}</dd></div>
+        <div className="point-detail-long"><dt>Участник</dt><dd tabIndex={0} aria-label="Участник">{memberLabel(point.member_id, username ?? point.username)}</dd></div>
         <div className="point-detail-long"><dt>Событие</dt><dd tabIndex={0} aria-label="Событие">{point.id}</dd></div>
         <div className="point-detail-long"><dt>Записано</dt><dd tabIndex={0} aria-label="Записано"><time dateTime={point.recorded_at}>{point.recorded_at}</time></dd></div>
         <div className="point-detail-long"><dt>Получено</dt><dd tabIndex={0} aria-label="Получено"><time dateTime={point.received_at}>{point.received_at}</time></dd></div>
@@ -198,8 +203,8 @@ export default function MapView({ routes, selectedMember }: { routes: MemberRout
         const next = Math.max(0, Math.min(route.events.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)));
         keyboardIndex.current.set(route.id, next);
         setPoint(route.events[next]);
-      }}>Участник {route.id}: открыть точку. Для перехода между точками используйте стрелки.</button>)}
+      }}>Участник {memberLabel(route.id, route.username)}: открыть точку. Для перехода между точками используйте стрелки.</button>)}
     </div>
-    {point && createPortal(<PointDetails point={point} />, popupContent)}
+    {point && createPortal(<PointDetails point={point} username={routes.find((route) => route.id === point.member_id)?.username} />, popupContent)}
   </>;
 }

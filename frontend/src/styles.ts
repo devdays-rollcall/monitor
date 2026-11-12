@@ -258,7 +258,7 @@ export const MemberButton = styled(Button)`
   &[aria-pressed='true'] { background: rgba(222, 237, 255, .72); box-shadow: inset 0 0 0 1px rgba(0, 102, 204, .18); }
   @media (hover: hover) { &[aria-pressed='true']:hover { background-color: rgba(202, 226, 253, .85); } }
   &[aria-pressed='true']:active { background-color: rgba(184, 215, 250, .9); }
-  strong { display: block; font: 600 13px ui-monospace, monospace; color: var(--ink); }
+  strong { display: block; overflow-wrap: anywhere; font: 600 13px ui-monospace, monospace; color: var(--ink); }
   small { display: block; color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 4px; }
 `;
 export const Swatch = styled.span<{ $color: string }>`
@@ -283,6 +283,7 @@ export const AlertBanner = styled.div<{ $sos?: boolean }>`
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: calc(100% - 32px);
   padding: 9px 12px; border-radius: 12px; background: ${({ $sos }) => $sos ? 'rgba(255, 218, 212, .94)' : 'rgba(255, 232, 161, .9)'};
   color: ${({ $sos }) => $sos ? '#8f251b' : '#634600'}; font-size: 13px; font-weight: 600; backdrop-filter: var(--glass-blur);
+  span { min-width: 0; overflow-wrap: anywhere; }
   button, a { border: 0; background: transparent; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
   button:disabled { opacity: .55; }
   @media (max-width: 760px) { top: 60px; width: max-content; }

@@ -47,9 +47,9 @@ test('opens three routes and refreshes points', async ({ page }) => {
   await page.getByLabel('Ключ группы').fill(token);
   await page.getByRole('button', { name: 'Открыть карту' }).click();
   await expect(page.getByText('3 участника · 6 точек')).toBeVisible();
-  await expect(page.getByText('11111111', { exact: true })).toBeVisible();
-  await expect(page.getByText('22222222', { exact: true })).toBeVisible();
-  await expect(page.getByText('33333333', { exact: true })).toBeVisible();
+  await expect(page.getByText(members[0], { exact: true })).toBeVisible();
+  await expect(page.getByText(members[1], { exact: true })).toBeVisible();
+  await expect(page.getByText(members[2], { exact: true })).toBeVisible();
   await expect(page.locator('.maplibregl-canvas')).toBeAttached();
   const marker = page.getByRole('button', { name: /Участник 11111111.*открыть точку/ });
   await marker.focus();
@@ -376,9 +376,25 @@ test('shows when ntfy did not accept a warning', async ({ page }) => {
 
 test('shows when the warning is an SOS', async ({ page }) => {
   await page.route('**/api/v1/events*', (route) => route.fulfill({ json: { events: [], next_cursor: null } }));
-  await page.route('**/api/v1/alert', (route) => route.fulfill({ json: { active: true, source: 'sos', member_id: '8c1e5b0a-3f2d-4c6e-9a7b-1d2e3f4a5b6c', alert_id: '0b08ff93-5e04-4e55-8cac-769f84050a20', subscription_url: 'https://notify.example/topic', observers: 0, approvals: 0, required_approvals: 1, registered: false, approved: false } }));
+  await page.route('**/api/v1/alert', (route) => route.fulfill({ json: { active: true, source: 'sos', member_id: '8c1e5b0a-3f2d-4c6e-9a7b-1d2e3f4a5b6c', username: 'Аня', alert_id: '0b08ff93-5e04-4e55-8cac-769f84050a20', subscription_url: 'https://notify.example/topic', observers: 0, approvals: 0, required_approvals: 1, registered: false, approved: false } }));
   await page.goto('/');
   await page.getByLabel('Ключ группы').fill(token);
   await page.getByRole('button', { name: 'Открыть карту' }).click();
-  await expect(page.getByText('SOS от участника 8c1e5b0a')).toBeVisible();
+  await expect(page.getByText('SOS от участника Аня (8c1e5b0a-3f2d-4c6e-9a7b-1d2e3f4a5b6c)')).toBeVisible();
+});
+
+
+test('automatically shows new points and participant names', async ({ page }) => {
+  const points = [{ ...event(members[0], 0, 1), username: 'Аня' }];
+  await stubTiles(page);
+  await page.route('**/api/v1/events*', (route) => route.fulfill({ json: { events: points, next_cursor: null } }));
+  await page.goto('/');
+  await page.getByLabel('Ключ группы').fill(token);
+  await page.getByRole('button', { name: 'Открыть карту' }).click();
+  await expect(page.getByText(`Аня (${members[0]})`, { exact: true })).toBeVisible();
+  points.push({ ...event(members[0], 0, 2), username: 'Аня' });
+  await expect(page.getByText('1 участник · 2 точки')).toBeVisible({ timeout: 15000 });
+  await page.getByRole('button', { name: /Участник Аня.*открыть точку/ }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.maplibregl-popup-content')).toContainText(`Аня (${members[0]})`);
 });

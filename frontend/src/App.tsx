@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Bell, BellRing, CheckCircle2, CircleAlert, Compass, Copy, Link, LoaderCircle, Map as MapIcon, RefreshCw } from 'lucide-react';
 import { clearAlert, createShareLink, getAlert, getEvents, raiseAlert, type AlertState, type EventOutput } from './generated';
-import MapView, { formatTime, type MemberRoute } from './MapView';
+import MapView, { formatTime, memberLabel, type MemberRoute } from './MapView';
 import { updateUrl } from './urlState';
 import { ActionsGroup, AlertAction, AlertBanner, AlertControls, Brand, EmptyMap, Header, IconButton, InlineError, LoginAction, LoginCard, MapArea, Member, MemberButton, MemberList, SectionLabel, ShareFeedback, Shell, Sidebar, SideActions, Spinner, Subtle, Swatch, TokenInput, Welcome, Workspace } from './styles';
 
@@ -51,6 +51,7 @@ function routesFor(events: EventOutput[], assigned: Map<string, string>): Member
     .map(([id, points]) => ({
       id,
       color: colorFor(id, assigned),
+      username: [...points].reverse().find((point) => point.username)?.username,
       events: points.sort((left, right) => Date.parse(left.recorded_at) - Date.parse(right.recorded_at)),
     }));
 }
@@ -78,8 +79,9 @@ export default function App() {
   const [selectedMember, setSelectedMember] = useState<string | null>(() => new URLSearchParams(window.location.search).get('member'));
   const colors = useRef(new Map<string, string>());
   const activeRequest = useRef<AbortController | null>(null);
+  const loadedEvents = useRef('');
 
-  async function load(groupToken: string, newGroup = false) {
+  async function load(groupToken: string, newGroup = false, background = false) {
     const normalized = groupToken.trim();
 
     if (!/^(?:view_)?[A-Za-z0-9_-]{43}$/.test(normalized)) {
@@ -87,10 +89,11 @@ export default function App() {
       return;
     }
 
+    if (background && activeRequest.current) return;
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
-    setLoading(true);
+    if (!background) setLoading(true);
     setError('');
 
     try {
@@ -115,18 +118,25 @@ export default function App() {
       }
 
       const loadedRoutes = routesFor(allEvents, colors.current);
-      if (selectedMember && !loadedRoutes.some((route) => route.id === selectedMember)) {
+      if (newGroup && selectedMember && !loadedRoutes.some((route) => route.id === selectedMember)) {
         setSelectedMember(null);
         updateUrl({ member: null });
       }
 
-      setEvents(allEvents);
-      setRoutes(loadedRoutes);
+      const snapshot = JSON.stringify(allEvents);
+      if (newGroup || snapshot !== loadedEvents.current) {
+        loadedEvents.current = snapshot;
+        setEvents(allEvents);
+        setRoutes(loadedRoutes);
+      }
       setToken(normalized);
     } catch (reason) {
       if (!controller.signal.aborted) setError(reason instanceof Error && reason.message !== 'Failed to fetch' ? reason.message : errorMessage(0));
     } finally {
-      if (!controller.signal.aborted) setLoading(false);
+      if (!controller.signal.aborted) {
+        activeRequest.current = null;
+        setLoading(false);
+      }
     }
   }
 
@@ -142,6 +152,12 @@ export default function App() {
       setError('Проверьте ссылку для просмотра.');
     }
   }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    const timer = setInterval(() => void load(token, false, true), 10000);
+    return () => clearInterval(timer);
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -241,6 +257,8 @@ export default function App() {
     tokenRef.current = '';
     activeRequest.current?.abort();
     colors.current.clear();
+    activeRequest.current = null;
+    loadedEvents.current = '';
     setInput('');
     setToken('');
     setEvents([]);
@@ -274,9 +292,9 @@ export default function App() {
         </Welcome>
       ) : (
         <Workspace>
-          {alert?.active && <AlertBanner role="status" $sos={alert.source === 'sos'}><CircleAlert size={18} /><span>{alert.source === 'sos' ? (alert.member_id ? `SOS от участника ${alert.member_id.slice(0, 8)}` : 'SOS от участника') : alert.source === 'observer' ? 'Предупреждение наблюдателя' : 'Предупреждение активно'}</span><button type="button" disabled={alertBusy !== null} onClick={() => void updateAlert(false)}>{alertBusy === 'clear' ? 'Снимаем…' : 'Снять'}</button></AlertBanner>}
+          {alert?.active && <AlertBanner role="status" $sos={alert.source === 'sos'}><CircleAlert size={18} /><span>{alert.source === 'sos' ? (alert.member_id ? `SOS от участника ${memberLabel(alert.member_id, alert.username)}` : 'SOS от участника') : alert.source === 'observer' ? 'Предупреждение наблюдателя' : 'Предупреждение активно'}</span><button type="button" disabled={alertBusy !== null} onClick={() => void updateAlert(false)}>{alertBusy === 'clear' ? 'Снимаем…' : 'Снять'}</button></AlertBanner>}
           <MapArea aria-label="Карта маршрутов">
-            {routes.length > 0 ? <MapView routes={routes} selectedMember={selectedMember} /> : <EmptyMap><MapIcon size={32} /><strong>{events.length ? 'Нет GPS-точек' : 'Пока нет событий'}</strong><p>Отправьте данные с телефона и обновите карту.</p></EmptyMap>}
+            {routes.length > 0 ? <MapView routes={routes} selectedMember={selectedMember} /> : <EmptyMap><MapIcon size={32} /><strong>{events.length ? 'Нет GPS-точек' : 'Пока нет событий'}</strong><p>Точки появятся после отправки данных с телефона.</p></EmptyMap>}
           </MapArea>
           <Sidebar>
             <h1>Ваша группа</h1>
@@ -309,7 +327,7 @@ export default function App() {
                     updateUrl({ member });
                   }}>
                     <Swatch $color={route.color} />
-                    <div><strong>{route.id.slice(0, 8)}</strong><small>Последняя точка<br />{formatTime(route.events[route.events.length - 1].recorded_at)}</small></div>
+                    <div><strong>{memberLabel(route.id, route.username)}</strong><small>Последняя точка<br />{formatTime(route.events[route.events.length - 1].recorded_at)}</small></div>
                     <small>{countLabel(route.events.length, 'точка', 'точки', 'точек')}</small>
                   </MemberButton>
                 </Member>
